@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebRTC vs HTTP-FLV Latency Comparison</title>
+    <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.8.0/dist/mpegts.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+        input {
+            flex-grow: 1;
+            padding: 8px;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .players-container {
+            display: flex;
+            gap: 20px;
+            justify-content: space-between;
+        }
+        .player-box {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+        }
+        video {
+            width: 100%;
+            background-color: #000;
+            height: 360px;
+            object-fit: contain;
+        }
+        .log-container {
+            padding: 10px;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            height: 150px;
+            overflow-y: auto;
+        }
+        .log-entry {
+            margin: 5px 0;
+            font-family: monospace;
+            font-size: 0.85em;
+        }
+        .log-info { color: #0066cc; }
+        .log-error { color: #cc0000; }
+        .log-success { color: #006600; }
+        .stats {
+            margin-top: 10px;
+            font-size: 0.85em;
+            border-top: 1px solid #eee;
+            padding-top: 10px;
+        }
+        .error {
+            color: red;
+            display: none;
+            margin-bottom: 10px;
+        }
+        .latency-info {
+            background-color: #f5f5f5;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .latency-value {
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        .video-cover {
+            object-fit: cover;
+        }
+        .video-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 5px;
+        }
+        .video-controls button {
+            padding: 4px 8px;
+            font-size: 0.8em;
+        }
+        .flv-player-box {
+            flex: 0 0 640px;
+            width: 640px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WebRTC vs HTTP-FLV Latency Comparison</h1>
+        <p>Use this tool to compare latency between WebRTC and HTTP-FLV streams from ZLMediaKit</p>
+        
+        <div class="input-group">
+            <input type="text" id="streamName" placeholder="Stream name (without protocol/extension)">
+            <input type="text" id="serverBase" placeholder="Server base URL (e.g., https://server.com)">
+            <button id="startButton">Start Comparison</button>
+            <button id="stopButton">Stop All</button>
+        </div>
+        
+        <div id="error" class="error"></div>
+        
+        <div class="players-container">
+            <!-- WebRTC Player Box -->
+            <div class="player-box">
+                <h2>WebRTC Stream</h2>
+                <video id="webrtcVideo" autoplay playsinline controls></video>
+                <div class="stats" id="webrtcStats"></div>
+                <div class="latency-info">
+                    <span>Estimated Latency:</span>
+                    <span id="webrtcLatency" class="latency-value">-</span>
+                </div>
+                <div class="log-container" id="webrtcLog"></div>
+            </div>
+            
+            <!-- HTTP-FLV Player Box -->
+            <div class="player-box flv-player-box">
+                <h2>HTTP-FLV Stream</h2>
+                <video id="flvVideo" autoplay playsinline controls></video>
+                <div class="stats" id="flvStats"></div>
+                <div class="latency-info">
+                    <span>Estimated Latency:</span>
+                    <span id="flvLatency" class="latency-value">-</span>
+                </div>
+                <div class="log-container" id="flvLog"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Include the player components -->
+    <script src="player/zlm-webrtc-player.js"></script>
+    <script src="player/zlm-flv-player.js"></script>
+    
+    <script>
+        // DOM Elements
+        const streamNameInput = document.getElementById('streamName');
+        const serverBaseInput = document.getElementById('serverBase');
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const errorDiv = document.getElementById('error');
+        const webrtcLatencyDisplay = document.getElementById('webrtcLatency');
+        const flvLatencyDisplay = document.getElementById('flvLatency');
+        
+        // Initialize players
+        const webrtcPlayer = new ZLMWebRTCPlayer({
+            videoElement: document.getElementById('webrtcVideo'),
+            logContainer: document.getElementById('webrtcLog'),
+            statsContainer: document.getElementById('webrtcStats')
+        });
+        
+        // Update to use the new ZLMStreamPlayer (which is backward compatible with ZLMFLVPlayer)
+        const flvPlayer = new ZLMStreamPlayer({
+            videoElement: document.getElementById('flvVideo'),
+            logContainer: document.getElementById('flvLog'),
+            statsContainer: document.getElementById('flvStats'),
+            streamType: 'flv' // Explicitly set to FLV mode
+        });
+        
+        // Track current state
+        let webrtcStartTime = 0;
+        let flvStartTime = 0;
+        
+        // Set up WebRTC player events
+        webrtcPlayer.onConnected = () => {
+            webrtcLatencyDisplay.textContent = "Calculating...";
+            webrtcStartTime = Date.now();
+        };
+        
+        webrtcPlayer.onStats = (stats) => {
+            // WebRTC doesn't provide direct latency info, but we can estimate
+            // with RTT/2 when available
+            if (stats.jitter !== undefined) {
+                const estimatedLatency = (stats.jitter * 1000).toFixed(2);
+                webrtcLatencyDisplay.textContent = `~${estimatedLatency}ms`;
+            }
+        };
+        
+        webrtcPlayer.onError = (error) => {
+            showError(`WebRTC Error: ${error.message}`);
+        };
+        
+        // Set up FLV player events
+        flvPlayer.onConnected = () => {
+            flvLatencyDisplay.textContent = "Calculating...";
+            flvStartTime = Date.now();
+        };
+        
+        flvPlayer.onStats = (stats) => {
+            if (stats.estimatedLatency !== undefined) {
+                flvLatencyDisplay.textContent = `~${stats.estimatedLatency * 1000}ms`;
+            }
+        };
+        
+        flvPlayer.onError = (error) => {
+            showError(`Stream Error: ${error.message}`);
+        };
+        
+        // Start button click handler
+        startButton.addEventListener('click', async () => {
+            const streamName = streamNameInput.value.trim();
+            const serverBase = serverBaseInput.value.trim();
+            
+            if (!streamName || !serverBase) {
+                showError('Please enter both stream name and server base URL');
+                return;
+            }
+            
+            hideError();
+            startButton.disabled = true;
+            stopButton.disabled = false;
+            
+            // Construct URLs with the confirmed format
+            const webrtcUrl = `${serverBase}/index/api/webrtc?app=live&stream=${streamName}&type=play`;
+            const flvUrl = `${serverBase}/live/${streamName}.live.flv`;
+            
+            try {
+                // Start both players with a delay between them to avoid bandwidth issues
+                await webrtcPlayer.play(webrtcUrl);
+                
+                // Wait a second before starting FLV to avoid overwhelming the connection
+                setTimeout(async () => {
+                    try {
+                        // Ensure the video element is properly sized before playing
+                        const flvVideo = document.getElementById('flvVideo');
+                        // flvVideo.style.width = '100%';
+                        flvVideo.style.height = '360px';
+                        flvVideo.style.width = '640px';
+                        
+                        await flvPlayer.play(flvUrl);
+                    } catch (flvError) {
+                        showError(`Stream Error: ${flvError.message}`);
+                    }
+                }, 1000);
+                
+            } catch (webrtcError) {
+                showError(`WebRTC Stream Error: ${webrtcError.message}`);
+                startButton.disabled = false;
+            }
+        });
+        
+        // Stop button click handler
+        stopButton.addEventListener('click', () => {
+            webrtcPlayer.stop();
+            flvPlayer.stop();
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            webrtcLatencyDisplay.textContent = "-";
+            flvLatencyDisplay.textContent = "-";
+        });
+        
+        // Helper function to show error
+        function showError(message) {
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        // Helper function to hide error
+        function hideError() {
+            errorDiv.style.display = 'none';
+        }
+        
+        // Initially disable stop button
+        stopButton.disabled = true;
+        
+        // Set default server if not specified
+        if (!serverBaseInput.value) {
+            // You can set a default server if needed
+            // serverBaseInput.value = "https://your-zlmediakit-server.com";
+        }
+    </script>
+</body>
+</html> 

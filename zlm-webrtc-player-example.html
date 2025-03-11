@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZLMediaKit WebRTC Player Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+        #urlInput {
+            flex-grow: 1;
+            padding: 8px;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #videoPlayer {
+            width: 100%;
+            background-color: #000;
+        }
+        .error {
+            color: red;
+            display: none;
+        }
+        .log-container {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            height: 200px;
+            overflow-y: auto;
+        }
+        .log-entry {
+            margin: 5px 0;
+            font-family: monospace;
+        }
+        .log-info { color: #0066cc; }
+        .log-error { color: #cc0000; }
+        .log-success { color: #006600; }
+        .stats {
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ZLMediaKit WebRTC Player</h1>
+        <div class="input-group">
+            <input type="text" id="urlInput" placeholder="Enter WebRTC URL">
+            <button id="playButton">Play</button>
+            <button id="stopButton">Stop</button>
+        </div>
+        <div id="error" class="error"></div>
+        <video id="videoPlayer" autoplay playsinline></video>
+        <div class="stats" id="stats"></div>
+        <div class="log-container" id="logContainer"></div>
+    </div>
+
+    <!-- Include the player component -->
+    <script src="player/zlm-webrtc-player.js"></script>
+    
+    <script>
+        // Get elements
+        const videoElement = document.getElementById('videoPlayer');
+        const urlInput = document.getElementById('urlInput');
+        const playButton = document.getElementById('playButton');
+        const stopButton = document.getElementById('stopButton');
+        const errorDiv = document.getElementById('error');
+        const logContainer = document.getElementById('logContainer');
+        const statsContainer = document.getElementById('stats');
+        
+        // Create player instance
+        const player = new ZLMWebRTCPlayer({
+            videoElement: videoElement,
+            logContainer: logContainer,
+            statsContainer: statsContainer
+        });
+        
+        // Set up event handlers
+        player.onConnected = () => {
+            playButton.disabled = true;
+            stopButton.disabled = false;
+            hideError();
+        };
+        
+        player.onDisconnected = () => {
+            playButton.disabled = false;
+            stopButton.disabled = true;
+        };
+        
+        player.onError = (error) => {
+            showError(error.message);
+            playButton.disabled = false;
+            stopButton.disabled = true;
+        };
+        
+        // Play button click handler
+        playButton.addEventListener('click', async () => {
+            if (!urlInput.value) {
+                showError('Please enter a WebRTC URL');
+                return;
+            }
+            
+            hideError();
+            playButton.disabled = true;
+            
+            try {
+                await player.play(urlInput.value);
+            } catch (error) {
+                playButton.disabled = false;
+                showError(error.message);
+            }
+        });
+        
+        // Stop button click handler
+        stopButton.addEventListener('click', () => {
+            player.stop();
+            playButton.disabled = false;
+            stopButton.disabled = true;
+        });
+        
+        // Initially disable stop button
+        stopButton.disabled = true;
+        
+        // Helper function to show error
+        function showError(message) {
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        // Helper function to hide error
+        function hideError() {
+            errorDiv.style.display = 'none';
+        }
+    </script>
+</body>
+</html> 
