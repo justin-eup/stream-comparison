@@ -232,7 +232,25 @@
             showError(`Stream Error: ${error.message}`);
         };
         
-        // Start button click handler
+        function getUrlParams() {
+            const params = new URLSearchParams(window.location.search);
+            return {
+                streamName: params.get('stream'),
+                serverBase: params.get('server')
+            };
+        }
+
+        function updateUrlParams(streamName, serverBase) {
+            const url = new URL(window.location.href);
+            url.searchParams.set('stream', streamName);
+            url.searchParams.set('server', serverBase);
+            window.history.replaceState({}, '', url);
+        }
+
+        const urlParams = getUrlParams();
+        if (urlParams.streamName) streamNameInput.value = urlParams.streamName;
+        if (urlParams.serverBase) serverBaseInput.value = urlParams.serverBase;
+
         startButton.addEventListener('click', async () => {
             const streamName = streamNameInput.value.trim();
             const serverBase = serverBaseInput.value.trim();
@@ -241,6 +259,9 @@
                 showError('Please enter both stream name and server base URL');
                 return;
             }
+            
+            // Update URL with current parameters
+            updateUrlParams(streamName, serverBase);
             
             hideError();
             startButton.disabled = true;
