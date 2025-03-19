@@ -283,7 +283,7 @@
             
             try {
                 // Start both players with a delay between them to avoid bandwidth issues
-                await webrtcPlayer.play(webrtcUrl);
+                webrtcPlayer.play(webrtcUrl);
                 
                 // Wait a second before starting FLV to avoid overwhelming the connection
                 setTimeout(async () => {
